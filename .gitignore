@@ -1,0 +1,62 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+backend/test-report.html
+backend/_version.txt
+# 前端 vitest 自動產生的測試報告（根目錄）
+test-report.html
+
+# Build/run logs
+build.log
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/test-report/
+
+# Build artifacts
+dist/
+build/
+backend/static/
+*.spec.bak
+
+# Claude harness runtime state
+.claude/scheduled_tasks.lock
+# 機器本地設定（含使用者名稱 / 絕對路徑，不該進公開 repo）
+.claude/settings.local.json
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# 機密：絕對不能進 repo（Lite 不需要任何 Google 憑證；放進來就是放錯 repo）
+client_secret.json
+**/token.json
+*.env
+
+# 工具二進位（CI 會自己下載；本地 build 才放）
+tools/*
+!tools/README.md
+!tools/.gitkeep
+
+# UI 測試輸出
+ui-tests/screenshots/
+ui-tests/screenshots_skill/
+ui-tests/screenshots_walkthrough/
+ui-tests/test_report.html
+ui-tests/test_results.json
+ui-tests/skill_test_report.html
+ui-tests/skill_test_results.json
+ui-tests/test_normalize_panel_report.html
+ui-tests/test_normalize_panel_results.json
+ui-tests/feature_walkthrough_report.html
+ui-tests/feature_walkthrough_results.json
+# fixtures *do* get tracked (small, deterministic mp3 test inputs)
+!ui-tests/fixtures/

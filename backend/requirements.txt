@@ -1,0 +1,8 @@
+fastapi==0.135.1
+uvicorn==0.41.0
+# yt-dlp 依賴 YouTube 內部實作，上游高頻發版；此 pin 需定期檢視。
+# yt-dlp-ejs 提供解 nsig challenge 的 JS solver，與 yt-dlp 有版本相依，兩者須成組升版。
+# 🔴 本專案刻意不依賴任何 Google API 套件（google-auth、google-api-python-client 等），
+#    tests/test_no_google_auth.py 會守住這一點。
+yt-dlp==2026.7.4
+yt-dlp-ejs==0.8.0

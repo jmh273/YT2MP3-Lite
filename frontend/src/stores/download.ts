@@ -1,0 +1,179 @@
+import { defineStore } from 'pinia'
+import { ref, watch } from 'vue'
+import { apiPost, API_BASE } from '@/api'
+
+export interface VideoItem {
+  video_id: string
+  title: string
+  url: string
+  thumbnail: string
+  published: string
+  duration_seconds?: number | null
+  channel_id?: string
+  channel_title?: string
+  view_count?: number
+  downloaded_on_disk?: boolean
+}
+
+export interface ProgressItem {
+  title: string
+  percent: number
+  speed?: string
+  status: 'pending' | 'downloading' | 'converting' | 'retrying' | 'done' | 'error'
+  error?: string
+  /** 目前為第幾次嘗試；重試中與最終失敗時由後端帶入 */
+  attempt?: number
+}
+
+const SELECTED_STORAGE_KEY = 'yt_mp3_selected'
+
+function loadSelectedVideos(): VideoItem[] {
+  const stored = localStorage.getItem(SELECTED_STORAGE_KEY)
+  if (!stored) return []
+  try {
+    const parsed = JSON.parse(stored)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+export const useDownloadStore = defineStore('download', () => {
+  const selected = ref<VideoItem[]>(loadSelectedVideos())
+  const taskId = ref<string | null>(null)
+  const progress = ref<Record<string, ProgressItem>>({})
+  const downloading = ref(false)
+  const lastWorkDirName = ref(localStorage.getItem('yt_mp3_last_work_dir') || '')
+  const autoPipeline = ref<boolean>(localStorage.getItem('yt_mp3_auto_pipeline') === 'true')
+  const lastDownloadDir = ref('')
+  const lastFormat = ref<'mp3' | 'mp4'>('mp3')
+  // 下載目標資料夾的完整路徑，由下載分頁維護，音量正規化分頁共用為預設值
+  const targetDirPath = ref('')
+
+  const downloadedIds = ref<Set<string>>(new Set())
+  // 全域「允許再次下載」覆寫開關：所有影片清單頁共用。
+  // 刻意不持久化——危險模式不該跨 session 存活，重新整理即回到 OFF。
+  // 亦刻意不註冊 watch：關閉開關只恢復 checkbox 停用呈現，不更動 selected。
+  const allowRedownload = ref(false)
+  const storedIds = localStorage.getItem('yt_mp3_downloaded_ids')
+  if (storedIds) {
+    try {
+      downloadedIds.value = new Set(JSON.parse(storedIds))
+    } catch {
+      // ignore
+    }
+  }
+
+  watch(autoPipeline, (v) => {
+    localStorage.setItem('yt_mp3_auto_pipeline', String(v))
+  }, { flush: 'sync' })
+
+  watch(selected, (videos) => {
+    localStorage.setItem(SELECTED_STORAGE_KEY, JSON.stringify(videos))
+  }, { deep: true, flush: 'sync' })
+
+  function markAsDownloaded(videoId: string) {
+    downloadedIds.value.add(videoId)
+    localStorage.setItem('yt_mp3_downloaded_ids', JSON.stringify(Array.from(downloadedIds.value)))
+    
+    // 從待下載清單移除
+    const idx = selected.value.findIndex(v => v.video_id === videoId)
+    if (idx >= 0) selected.value.splice(idx, 1)
+  }
+
+  function isDownloaded(videoId: string) {
+    return downloadedIds.value.has(videoId)
+  }
+
+  function toggle(video: VideoItem) {
+    const idx = selected.value.findIndex((v) => v.video_id === video.video_id)
+    if (idx >= 0) {
+      selected.value.splice(idx, 1)
+    } else {
+      selected.value.push(video)
+    }
+  }
+
+  function isSelected(video_id: string) {
+    return selected.value.some((v) => v.video_id === video_id)
+  }
+
+  function clearAll() {
+    selected.value = []
+    progress.value = {}
+  }
+
+  async function startDownload(
+    format: 'mp3' | 'mp4' = 'mp3',
+    quality: number = 192,
+    opts: { seqEnabled?: boolean; startSeq?: string | null; targetDir?: string | null } = {},
+  ) {
+    if (selected.value.length === 0) return
+    downloading.value = true
+    lastFormat.value = format
+    progress.value = {}
+
+    const payload: Record<string, unknown> = {
+      videos: selected.value,
+      format,
+      quality,
+    }
+    if (opts.seqEnabled === false) {
+      payload.seq_enabled = false
+    } else if (opts.seqEnabled === true) {
+      payload.seq_enabled = true
+      if (typeof opts.startSeq === 'string' && opts.startSeq.length > 0) {
+        payload.start_seq = opts.startSeq
+      }
+    }
+    if ('targetDir' in opts && typeof opts.targetDir === 'string' && opts.targetDir.trim()) {
+      payload.target_dir = opts.targetDir.trim()
+      lastWorkDirName.value = opts.targetDir.trim()
+      localStorage.setItem('yt_mp3_last_work_dir', lastWorkDirName.value)
+    }
+
+    const { task_id, directory } = await apiPost<{ task_id: string; directory?: string }>('/download', payload)
+    taskId.value = task_id
+    lastDownloadDir.value = directory ?? ''
+
+    const es = new EventSource(`${API_BASE}/download/progress/${task_id}`)
+    es.onmessage = (e) => {
+      const data = JSON.parse(e.data)
+      if (data.items) {
+        progress.value = data.items
+        for (const [vid, info] of Object.entries(data.items)) {
+          if ((info as ProgressItem).status === 'done') {
+            markAsDownloaded(vid)
+          }
+        }
+      }
+      if (data.status === 'done') {
+        es.close()
+        downloading.value = false
+      }
+    }
+    es.onerror = () => {
+      es.close()
+      downloading.value = false
+    }
+  }
+
+  return {
+    selected,
+    taskId,
+    progress,
+    downloading,
+    lastWorkDirName,
+    targetDirPath,
+    autoPipeline,
+    lastDownloadDir,
+    lastFormat,
+    toggle,
+    isSelected,
+    clearAll,
+    startDownload,
+    isDownloaded,
+    markAsDownloaded,
+    allowRedownload,
+  }
+})

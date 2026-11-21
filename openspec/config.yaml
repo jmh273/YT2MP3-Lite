@@ -1,0 +1,40 @@
+schema: spec-driven
+
+# Project context (optional)
+context: |
+  YT2MP3-Lite 是從 C:/vue/YT_to_MP3（YT → MP3 Tool）拆出的免登入版本，給不想設定 Google Cloud 的朋友用。
+  - 🔴 任何功能 MUST NOT 需要 Google 帳號、OAuth 或 API 金鑰（見 specs/no-google-auth）。需要授權才做得到的功能不做。
+  - 下載核心（backend/main.py 的 yt-dlp 參數、player client、PO Token、ytdlp_loader.py、deno 版本）與完整版各自一份；
+    YouTube 改版需要修下載時，兩個 repo 都要改，proposal 要寫明另一個 repo 是否已同步。
+  - 與完整版共存：連接埠 8010、設定目錄 ~/.yt2mp3-lite/、exe 名 yt2mp3-lite.exe，不可與完整版（8000、~/.yt-mp3-tool/）相同。
+  - 使用者是非工程師：錯誤提示要寫成一步就能做的事（例如「到設定按『更新下載元件』」），不要求填 PO Token 之類的進階設定。
+  - 文件與介面一律繁體中文（台灣用語）。
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# Example:
+#   context: |
+#     Designs and tasks must cover Windows, macOS, and Linux
+#     Write all artifacts in Spanish
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
