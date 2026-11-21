@@ -101,7 +101,10 @@ echo [update] Downloading %LATEST_TAG%...
 REM Download script re-resolves the token (so we never pass it through batch env)
 REM and, when auth is needed, requests the API asset endpoint as an octet-stream.
 set DPS1=%TEMP%\yt2mp3-lite-download-release.ps1
-> "%DPS1%" echo $h=@{}
+REM Windows PowerShell 5.1 Invoke-WebRequest is dozens of times slower while it
+REM draws its progress bar (measured: 131 MB took ~10 min vs 18 s). Disable it.
+> "%DPS1%" echo $ProgressPreference='SilentlyContinue'
+>>"%DPS1%" echo $h=@{}
 >>"%DPS1%" echo $h['User-Agent']='yt2mp3-lite-updater'
 >>"%DPS1%" echo if ($env:AUTH_FLAG -eq '1') {
 >>"%DPS1%" echo   $tok=$env:GH_TOKEN
@@ -153,7 +156,7 @@ mkdir "%STAGE%"
 echo [update] Extracting to staging...
 for %%Z in ("%DOWNLOAD_DIR%\*.zip") do (
     powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-      "$ErrorActionPreference='Stop'; try { Expand-Archive -Path '%%Z' -DestinationPath '%STAGE%' -Force; exit 0 } catch { Write-Host ('[update] PowerShell error: ' + $_.Exception.Message); exit 1 }"
+      "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; try { Expand-Archive -Path '%%Z' -DestinationPath '%STAGE%' -Force; exit 0 } catch { Write-Host ('[update] PowerShell error: ' + $_.Exception.Message); exit 1 }"
     if errorlevel 1 (
         echo [update] ERROR: extract to staging failed. Existing install untouched.
         exit /b 5
