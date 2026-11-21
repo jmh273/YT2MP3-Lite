@@ -228,7 +228,19 @@ async function loadSettings() {
     download.targetDirPath = joinPath(outputPath.value, base)
   } else {
     refreshDefaultTargetDir()
+    rebaseTargetDirToOutputPath()
   }
+}
+
+// 後端下載時只取「下載到」最後一段資料夾名，接在目前的 output_path 後面。
+// 設定頁改了輸出資料夾後，store 裡沿用的路徑根目錄若還是舊的，畫面顯示的位置
+// 就和檔案實際存放的位置不一致——所以根目錄一律跟著 output_path，只保留資料夾名。
+function rebaseTargetDirToOutputPath() {
+  if (!outputPath.value || !download.targetDirPath) return
+  const leaf = basename(download.targetDirPath)
+  if (!leaf) return
+  const rebased = joinPath(outputPath.value, leaf)
+  if (rebased !== download.targetDirPath) download.targetDirPath = rebased
 }
 
 onMounted(async () => {
