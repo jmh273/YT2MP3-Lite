@@ -4,11 +4,26 @@ import pathlib
 import threading
 from unittest.mock import patch
 
+import pytest
+
 import main
 
 
 # ── _sanitize_filename ────────────────────────────────────────────────────────
-def test_sanitize_filename_replaces_fullwidth_punctuation():
+# _sanitize_filename 會丟掉「系統 ANSI 字碼頁編不出來的字」(mp3gain 走 ANSI argv)。
+# 結果因主機字碼頁而異:台灣 Windows 是 cp950,GitHub Actions 的 Windows runner 是 cp1252。
+# 下面的測試一律明確指定字碼頁,不依賴跑測試那台機器。
+@pytest.fixture
+def cp950_host(monkeypatch):
+    monkeypatch.setattr(main, "_FS_ANSI_ENCODING", "cp950")
+
+
+@pytest.fixture
+def cp1252_host(monkeypatch):
+    monkeypatch.setattr(main, "_FS_ANSI_ENCODING", "cp1252")
+
+
+def test_sanitize_filename_replaces_fullwidth_punctuation(cp950_host):
     s = main._sanitize_filename("馬斯克太空 AI 夢碎？「這一條線」｜EP.203")
     assert "？" not in s and "「" not in s and "」" not in s and "｜" not in s
     # CJK preserved
@@ -16,14 +31,14 @@ def test_sanitize_filename_replaces_fullwidth_punctuation():
     assert "EP.203" in s
 
 
-def test_sanitize_filename_replaces_emoji_and_slash():
+def test_sanitize_filename_replaces_emoji_and_slash(cp950_host):
     s = main._sanitize_filename("重磅🔥分析 2026/05/01")
     assert "🔥" not in s
     assert "/" not in s
     assert "重磅" in s and "分析" in s
 
 
-def test_sanitize_filename_preserves_cjk():
+def test_sanitize_filename_preserves_cjk(cp950_host):
     assert main._sanitize_filename("台積電股價分析") == "台積電股價分析"
 
 
@@ -48,24 +63,23 @@ def test_sanitize_filename_strips_trailing_dot_and_space():
     assert not out.endswith(".") and not out.endswith(" ")
 
 
-def test_sanitize_filename_drops_chars_not_in_system_codepage():
+def test_sanitize_filename_drops_chars_not_in_system_codepage(cp950_host):
     """U+7287 (rare 犇 variant) is in CJK Unified Ideographs block but not in CP950.
     mp3gain.exe (Windows ANSI argv) fails on filenames containing it.
     The sanitizer MUST drop characters that the active system codepage cannot encode."""
     rare = chr(0x7287)
-    # On a non-CP950 host this character may be encodable; only assert when it isn't.
-    try:
-        rare.encode(main._FS_ANSI_ENCODING)
-        encodable_on_host = True
-    except UnicodeEncodeError:
-        encodable_on_host = False
+    with pytest.raises(UnicodeEncodeError):
+        rare.encode("cp950")  # 前提:這個字確實不在 cp950
     out = main._sanitize_filename(f"財富狂{rare}_玩股網")
-    if not encodable_on_host:
-        assert rare not in out
-        assert "財富狂" in out and "玩股網" in out
-    else:
-        # Codepage supports it; sanitizer keeps it (no regression).
-        assert rare in out
+    assert rare not in out
+    assert "財富狂" in out and "玩股網" in out
+
+
+def test_sanitize_filename_on_non_cjk_codepage_drops_cjk(cp1252_host):
+    """非中文 Windows(cp1252):中文編不出來會被丟掉,只剩英數;全是中文時退回 untitled。
+    這是既有行為(mp3gain 只吃 ANSI 檔名),測試把它寫明,避免換機器跑測試時誤判。"""
+    assert main._sanitize_filename("台積電股價分析") == "untitled"
+    assert main._sanitize_filename("重磅分析 EP.203") == "EP.203"
 
 
 # ── _list_mp3s with needs_rename / suggested_name ────────────────────────────
