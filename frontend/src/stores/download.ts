@@ -23,6 +23,10 @@ export interface ProgressItem {
   error?: string
   /** 目前為第幾次嘗試；重試中與最終失敗時由後端帶入 */
   attempt?: number
+  /** MP4 完成時實際下載到的影像高度（yt-dlp 有回報才有） */
+  actual_height?: number
+  /** 實際高度低於選擇的畫質（常見原因：YouTube 只給沒有 PO Token 的工具 360p） */
+  downgraded?: boolean
 }
 
 const SELECTED_STORAGE_KEY = 'yt_mp3_selected'

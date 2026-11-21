@@ -706,8 +706,13 @@ def run_download(
         vid = v["video_id"]
         download_progress[task_id]["items"][vid] = {"title": v["title"], "percent": 0, "speed": "", "status": "pending"}
 
-    def make_hook(vid: str):
+    def make_hook(vid: str, seen: dict):
         def hook(d):
+            # 記下實際下載到的影像高度。沒有 PO Token 時 YouTube 常只給 360p，格式字串
+            # 的 `/best` 會悄悄退回去；不記下來，使用者只會以為下載的就是原畫質。
+            height = (d.get("info_dict") or {}).get("height")
+            if isinstance(height, int) and height > seen.get("height", 0):
+                seen["height"] = height
             if d["status"] == "downloading":
                 pct_str = d.get("_percent_str", "0%").strip().replace("%", "")
                 speed_str = d.get("_speed_str", "").strip()
@@ -743,14 +748,18 @@ def run_download(
         # 其他影片不會因此被中斷或誤標為失敗，僅是開始時間可能後延。
         last_error = "未知錯誤"
         for attempt in range(1, max_retries + 2):
+            seen: dict = {}  # 每次嘗試重新解析，畫質可能不同，只採計成功那一次
             ydl_opts = _build_ydl_opts(
-                output_path, safe_title, make_hook(vid), fmt, quality, seq_prefix,
+                output_path, safe_title, make_hook(vid, seen), fmt, quality, seq_prefix,
                 player_clients, po_tokens,
             )
             ydl_opts["logger"] = _YdlLogger(vid, attempt)
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     ydl.download([v["url"]])
+                if fmt == "mp4" and seen.get("height"):
+                    item["actual_height"] = seen["height"]
+                    item["downgraded"] = seen["height"] < quality
                 item["status"] = "done"
                 item.pop("error", None)
                 item.pop("attempt", None)

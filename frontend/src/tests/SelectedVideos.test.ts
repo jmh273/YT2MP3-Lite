@@ -517,3 +517,40 @@ describe('SelectedVideos 失敗原因與重試狀態', () => {
     expect(wrapper.text()).not.toContain('支失敗')
   })
 })
+
+// ── 實際畫質低於選擇時的提示 ─────────────────────────────────────────────────
+describe('SelectedVideos 實際畫質低於選擇時提示', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    localStorage.clear()
+  })
+
+  function mountWithProgress(progress: Record<string, any>) {
+    const download = useDownloadStore()
+    download.progress = progress
+    return mount(SelectedVideos)
+  }
+
+  it('downgraded 的完成項顯示實際解析度與選擇的畫質', async () => {
+    const wrapper = mountWithProgress({
+      v1: { title: '影片一', percent: 100, status: 'done', actual_height: 360, downgraded: true },
+    })
+    await flushPromises()
+
+    const note = wrapper.find('[data-testid="quality-note"]')
+    expect(note.exists()).toBe(true)
+    expect(note.text()).toContain('360p')
+    expect(note.attributes('title')).toContain('YouTube')
+  })
+
+  it('畫質符合選擇時不顯示提示', async () => {
+    const wrapper = mountWithProgress({
+      v1: { title: '影片一', percent: 100, status: 'done', actual_height: 1080, downgraded: false },
+      v2: { title: '影片二', percent: 100, status: 'done' },
+    })
+    await flushPromises()
+
+    expect(wrapper.findAll('.progress-item')).toHaveLength(2)  // 錨點：兩列都有渲染
+    expect(wrapper.find('[data-testid="quality-note"]').exists()).toBe(false)
+  })
+})

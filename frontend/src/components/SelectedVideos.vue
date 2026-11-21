@@ -107,6 +107,15 @@
         <p v-if="item.status === 'error' && item.error" class="item-error">
           {{ item.error }}
         </p>
+        <!-- 畫質被降級時要說出來，否則使用者會以為下載的就是 YouTube 上看到的畫質 -->
+        <p
+          v-if="item.status === 'done' && item.downgraded && item.actual_height"
+          data-testid="quality-note"
+          class="item-note"
+          title="可能原因：影片本身沒有這麼高的畫質，或 YouTube 這次只提供較低畫質給下載工具（沒有 PO Token 時常只有 360p）。"
+        >
+          ⚠ 實際畫質 {{ item.actual_height }}p，低於選擇的畫質
+        </p>
       </div>
     </div>
 
@@ -326,6 +335,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .bar.converting { background: #ff9800; }
 .bar.retrying { background: #ff9800; }
 .item-error { color: #c00; font-size: 0.74rem; margin: 0.15rem 0 0; word-break: break-word; }
+.item-note { color: #b25e00; font-size: 0.74rem; margin: 0.15rem 0 0; cursor: help; }
 .pstatus { font-size: 0.75rem; color: #666; text-align: right; }
 .summary { margin-top: 1rem; color: #4caf50; font-size: 0.9rem; font-weight: bold; }
 </style>

@@ -1000,3 +1000,59 @@ def test_ejs_solver_status_reports_usable():
     version, usable = main._ejs_solver_status()
     assert usable is True
     assert version
+
+
+# ── 實際畫質低於選擇時標示（YouTube 沒給 PO Token 時常只提供 360p）────────────
+def _fake_ydl_reporting(heights: list[int | None]):
+    """假 YoutubeDL：download() 時依序以各 info_dict 呼叫 progress hook，
+    模擬 yt-dlp 對「影像串流 + 音訊串流」各回報一次 finished。"""
+    def factory(opts):
+        hooks = opts.get("progress_hooks", [])
+
+        def download(_urls):
+            for h in heights:
+                info = {"height": h} if h is not None else {"vcodec": "none"}
+                for hook in hooks:
+                    hook({"status": "finished", "info_dict": info})
+            return 0
+
+        inst = MagicMock()
+        inst.__enter__ = MagicMock(return_value=MagicMock(download=download))
+        inst.__exit__ = MagicMock(return_value=False)
+        return inst
+    return factory
+
+
+def test_mp4_lower_than_requested_is_flagged(tmp_path):
+    with patch("yt_dlp.YoutubeDL", side_effect=_fake_ydl_reporting([360, None])):
+        main.run_download(SAMPLE_VIDEOS, str(tmp_path), "q-low", fmt="mp4", quality=1080)
+    item = main.download_progress["q-low"]["items"]["abc123"]
+    assert item["status"] == "done"
+    assert item["actual_height"] == 360
+    assert item["downgraded"] is True
+
+
+def test_mp4_at_requested_quality_is_not_flagged(tmp_path):
+    with patch("yt_dlp.YoutubeDL", side_effect=_fake_ydl_reporting([1080, None])):
+        main.run_download(SAMPLE_VIDEOS, str(tmp_path), "q-ok", fmt="mp4", quality=1080)
+    item = main.download_progress["q-ok"]["items"]["abc123"]
+    assert item["actual_height"] == 1080
+    assert item["downgraded"] is False
+
+
+def test_mp3_never_flagged_for_resolution(tmp_path):
+    """MP3 只取音訊，影像解析度與它無關。"""
+    with patch("yt_dlp.YoutubeDL", side_effect=_fake_ydl_reporting([360])):
+        main.run_download(SAMPLE_VIDEOS, str(tmp_path), "q-mp3", fmt="mp3", quality=192)
+    item = main.download_progress["q-mp3"]["items"]["abc123"]
+    assert item["status"] == "done"
+    assert "downgraded" not in item and "actual_height" not in item
+
+
+def test_mp4_height_unknown_is_not_flagged(tmp_path):
+    """yt-dlp 沒回報高度時不猜：不標示，也不寫 actual_height。"""
+    with patch("yt_dlp.YoutubeDL", side_effect=_fake_ydl_reporting([None])):
+        main.run_download(SAMPLE_VIDEOS, str(tmp_path), "q-unk", fmt="mp4", quality=720)
+    item = main.download_progress["q-unk"]["items"]["abc123"]
+    assert item["status"] == "done"
+    assert "downgraded" not in item and "actual_height" not in item
